@@ -5,10 +5,7 @@ import com.bgsoftware.ssboneblock.task.NextPhaseTimer;
 import com.bgsoftware.ssboneblock.utils.EntityTypes;
 import com.bgsoftware.ssboneblock.utils.WorldUtils;
 import com.bgsoftware.superiorskyblock.api.wrappers.SuperiorPlayer;
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
@@ -73,6 +70,8 @@ public final class BlocksListener implements Listener {
 
             if (fakeEvent.isCancelled())
                 return;
+
+            e.getPlayer().incrementStatistic(Statistic.MINE_BLOCK, e.getBlock().getType());
 
             boolean shouldDropItems;
             try {
