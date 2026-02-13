@@ -41,6 +41,24 @@ public final class JsonUtils {
     }
 
     public static Optional<Action> getAction(JsonObject actionObject, PhasesHandler phasesHandler, String fileName) throws ParsingException {
+        // Handle nested "actions" arrays
+        if (actionObject.has("actions")) {
+            List<Action> multipleActions = new ArrayList<>();
+            
+            JsonElement actionsElement = actionObject.get("actions");
+            
+            if (!(actionsElement instanceof JsonArray))
+                throw new ParsingException("Section \"actions\" must be a list.");
+            
+            for (JsonElement _actionElement : (JsonArray) actionsElement) {
+                getAction(_actionElement.getAsJsonObject(), phasesHandler, fileName)
+                        .ifPresent(multipleActions::add);
+            }
+            
+            return multipleActions.isEmpty() ? Optional.empty() : 
+                    Optional.of(new MultiAction(multipleActions.toArray(new Action[0])));
+        }
+        
         JsonElement actionElement = actionObject.get("action");
 
         if (!(actionElement instanceof JsonPrimitive))
@@ -74,32 +92,38 @@ public final class JsonUtils {
 
         for (JsonElement actionElement : jsonArray) {
             JsonObject actionObject = actionElement.getAsJsonObject();
-            Action action;
 
             if (actionObject.has("actions")) {
-                List<Action> multipleActions = new ArrayList<>();
-
                 JsonElement actionsElement = actionObject.get("actions");
 
                 if (!(actionsElement instanceof JsonArray))
                     throw new IllegalArgumentException("Section \"actions\" must be a list.");
 
-                for (JsonElement _actionElement : (JsonArray) actionsElement) {
-                    getActionSafely(_actionElement.getAsJsonObject(), phasesManager, fileName)
-                            .ifPresent(multipleActions::add);
+                Action[] innerActions = getActionsArray((JsonArray) actionsElement, phasesManager, fileName);
+
+                if (actionObject.has("repeat")) {
+                    // Has "repeat": flatten inner actions into a sequence, repeat the whole sequence
+                    int repeatCount = actionObject.get("repeat").getAsInt();
+                    for (int r = 0; r < repeatCount; r++) {
+                        for (Action inner : innerActions)
+                            actionList.add(inner);
+                    }
+                } else {
+                    // No "repeat": wrap in MultiAction so all inner actions run together on one break
+                    Action combined = innerActions.length == 1 ? innerActions[0] : new MultiAction(innerActions);
+                    actionList.add(combined);
                 }
-                action = new MultiAction(multipleActions.toArray(new Action[0]));
             } else {
-                action = getActionSafely(actionObject, phasesManager, fileName).orElse(null);
+                Action action = getActionSafely(actionObject, phasesManager, fileName).orElse(null);
+
+                if (action == null)
+                    continue;
+
+                int amountOfActions = actionObject.has("amount") ? actionObject.get("amount").getAsInt() : 1;
+
+                for (int i = 0; i < amountOfActions; i++)
+                    actionList.add(action);
             }
-
-            if (action == null)
-                continue;
-
-            int amountOfActions = actionObject.has("amount") ? actionObject.get("amount").getAsInt() : 1;
-
-            for (int i = 0; i < amountOfActions; i++)
-                actionList.add(action);
         }
 
         return actionList.toArray(new Action[0]);
